@@ -1,11 +1,11 @@
 using Xunit;
 using FluentAssertions;
-using Auction.Domain;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Domain.Model;
 
-namespace Auction.SimulationTests;
+namespace SimulationTests;
 
 // High-level simulation: EU places during partition on a US-owned auction; after heal, US reconciles.
 public class PartitionReconcileSimulationTests
@@ -63,7 +63,7 @@ public class PartitionReconcileSimulationTests
     private sealed class RegionRuntime
     {
         public string Id { get; }
-        private readonly Dictionary<Guid, Domain.Auction> _auctions = new();
+        private readonly Dictionary<Guid, Domain.Model.Auction> _auctions = new();
         private readonly Dictionary<Guid, List<Bid>> _bids = new();
         public readonly HashSet<Guid> AppliedEvent = new(); // ledger
 
@@ -71,7 +71,7 @@ public class PartitionReconcileSimulationTests
 
         public void CreateAuction(Guid id, decimal currentHigh, long currentSeq)
         {
-            _auctions[id] = new Domain.Auction { Id = id, OwnerRegionId = "US", State = "Active", CurrentHighBid = currentHigh, CurrentSeq = currentSeq, RowVersion = 1 };
+            _auctions[id] = new Auction { Id = id, OwnerRegionId = Region.US, State = AuctionState.Active, CurrentHighBid = currentHigh, CurrentSeq = currentSeq, RowVersion = 1 };
         }
 
         public Guid PlaceBid(Guid auctionId, decimal amount, string sourceRegion, InterRegionChannel link)
@@ -79,7 +79,7 @@ public class PartitionReconcileSimulationTests
             // local write: assign seq, insert bid, update auction
             var a = _auctions[auctionId];
             var seq = a.CurrentSeq + 1;
-            var bid = new Bid { Id = Guid.NewGuid(), AuctionId = auctionId, Amount = amount, Sequence = seq, SourceRegionId = sourceRegion, CreatedAtUtc = DateTime.UtcNow, PartitionFlag = (link.State == LinkState.Partitioned) };
+            var bid = new Bid { Id = Guid.NewGuid(), AuctionId = auctionId, Amount = amount, Sequence = seq, SourceRegionId = Enum.Parse<Region>(sourceRegion), CreatedAtUtc = DateTime.UtcNow, PartitionFlag = (link.State == LinkState.Partitioned) };
             if (!_bids.TryGetValue(auctionId, out var list)) list = _bids[auctionId] = new();
             list.Add(bid);
 
@@ -93,7 +93,7 @@ public class PartitionReconcileSimulationTests
 
         public void EndAuction(Guid auctionId)
         {
-            var a = _auctions[auctionId]; a.State = "Ended"; a.RowVersion++; _auctions[auctionId] = a;
+            var a = _auctions[auctionId]; a.State = AuctionState.Ended; a.RowVersion++; _auctions[auctionId] = a;
         }
 
         public void FlushTo(RegionRuntime destination, InterRegionChannel link)

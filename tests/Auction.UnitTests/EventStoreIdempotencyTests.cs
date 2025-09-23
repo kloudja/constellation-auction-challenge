@@ -3,7 +3,7 @@ using FluentAssertions;
 using System;
 using System.Collections.Generic;
 
-namespace Auction.UnitTests;
+namespace UnitTests;
 
 // Demonstrates at-least-once delivery across regions using an AppliedEvent ledger per consumer region.
 public class EventStoreIdempotencyTests

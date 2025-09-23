@@ -1,6 +1,7 @@
+using Domain.Model;
 using System.Threading.Tasks;
 
-namespace Auction.Domain;
+namespace Domain;
 
 public interface IAuctionService
 {

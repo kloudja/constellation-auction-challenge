@@ -1,5 +1,5 @@
 using System;
 
-namespace Auction.Domain;
+namespace Domain;
 
 public record CreateAuctionRequest(Guid VehicleId, DateTime EndsAtUtc);

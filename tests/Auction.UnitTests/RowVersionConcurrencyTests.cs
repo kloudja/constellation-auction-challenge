@@ -1,12 +1,11 @@
 using Xunit;
 using FluentAssertions;
-using System.Collections.Generic;
 using System;
+using Domain.Model;
+using System.Collections.Generic;
 
-namespace Auction.UnitTests;
+namespace UnitTests;
 
-// Emulates an optimistic concurrency check at repository layer.
-// In a real infra, RowVersion is compared in UPDATE WHERE clause.
 public class RowVersionConcurrencyTests
 {
     [Fact(DisplayName = "Only one competing update succeeds when RowVersion matches")]
@@ -14,7 +13,7 @@ public class RowVersionConcurrencyTests
     {
         var repo = new InMemoryAuctionRepo();
         var id = Guid.NewGuid();
-        repo.Insert(new Domain.Auction { Id = id, CurrentHighBid = 100, CurrentSeq = 41, RowVersion = 7, State = "Active" });
+        repo.Insert(new Auction { Id = id, CurrentHighBid = 100, CurrentSeq = 41, RowVersion = 7, State = AuctionState.Active });
 
         // Tx1 reads RowVersion=7
         var ok1 = repo.TryUpdateCurrentHighBid(id, expectedRowVersion: 7, newAmount: 120, newSeq: 42);
@@ -30,11 +29,11 @@ public class RowVersionConcurrencyTests
 
     private sealed class InMemoryAuctionRepo
     {
-        private readonly Dictionary<Guid, Domain.Auction> _store = new();
+        private readonly Dictionary<Guid, Auction> _store = new();
 
-        public void Insert(Domain.Auction a) => _store[a.Id] = a;
+        public void Insert(Auction a) => _store[a.Id] = a;
 
-        public Domain.Auction Get(Guid id) => _store[id];
+        public Auction Get(Guid id) => _store[id];
 
         public bool TryUpdateCurrentHighBid(Guid id, long expectedRowVersion, decimal newAmount, long newSeq)
         {

@@ -1,3 +1,3 @@
-namespace Auction.Domain;
+namespace Domain;
 
 public enum ConsistencyLevel { Strong, Eventual }

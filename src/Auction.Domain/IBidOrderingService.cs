@@ -1,8 +1,9 @@
+using Domain.Model;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Auction.Domain;
+namespace Domain;
 
 public interface IBidOrderingService
 {

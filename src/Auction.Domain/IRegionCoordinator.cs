@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace Auction.Domain;
+namespace Domain;
 
 public interface IRegionCoordinator
 {

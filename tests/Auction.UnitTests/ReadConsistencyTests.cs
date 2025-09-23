@@ -3,7 +3,7 @@ using FluentAssertions;
 using System.Collections.Generic;
 using System;
 
-namespace Auction.UnitTests;
+namespace UnitTests;
 
 // Strong reads hit Write DB; Eventual reads hit Read Replica with lag.
 public class ReadConsistencyTests

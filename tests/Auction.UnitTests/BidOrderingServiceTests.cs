@@ -1,12 +1,13 @@
 using Xunit;
 using FluentAssertions;
-using Auction.Domain;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Linq;
 using System;
+using Domain;
+using Domain.Model;
 
-namespace Auction.UnitTests;
+namespace UnitTests;
 
 // Demonstrates per-auction monotonic sequence assignment.
 public class BidOrderingServiceTests

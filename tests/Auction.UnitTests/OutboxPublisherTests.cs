@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System;
 using System.Linq;
 
-namespace Auction.UnitTests;
+namespace UnitTests;
 
 // Simulates the outbox polling/publish pattern. Publisher marks row Published=true after emit.
 // Required by "Simple event bus + at-least-once + event storage / replay" (spec).

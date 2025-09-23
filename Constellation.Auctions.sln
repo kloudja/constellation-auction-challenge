@@ -5,23 +5,23 @@ VisualStudioVersion = 17.14.36518.9 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{065EDE11-EA94-4EEB-AD9D-637DA4D299BD}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auction.Domain", "src\Auction.Domain\Auction.Domain.csproj", "{F31BB41F-2D41-4D90-8DFF-FB962DA073B5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain", "src\Auction.Domain\Domain.csproj", "{F31BB41F-2D41-4D90-8DFF-FB962DA073B5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auction.Services", "src\Auction.Services\Auction.Services.csproj", "{13345F90-84EC-48D7-9CFC-413D5EE1CD86}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Services", "src\Auction.Services\Services.csproj", "{13345F90-84EC-48D7-9CFC-413D5EE1CD86}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auction.Infrastructure", "src\Auction.Infrastructure\Auction.Infrastructure.csproj", "{AF329E01-9E0E-40E9-AB1E-9821E0F07F2F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure", "src\Auction.Infrastructure\Infrastructure.csproj", "{AF329E01-9E0E-40E9-AB1E-9821E0F07F2F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auction.Eventing", "src\Auction.Eventing\Auction.Eventing.csproj", "{EE450D0D-7BF5-4E1C-BD4F-24DC54DE5D64}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eventing", "src\Auction.Eventing\Eventing.csproj", "{EE450D0D-7BF5-4E1C-BD4F-24DC54DE5D64}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auction.Sync", "src\Auction.Sync\Auction.Sync.csproj", "{5532BB35-C979-4770-9D0C-28D93430865D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sync", "src\Auction.Sync\Sync.csproj", "{5532BB35-C979-4770-9D0C-28D93430865D}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{A50C479B-D616-4E74-95CF-DE5BF43D249A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auction.UnitTests", "tests\Auction.UnitTests\Auction.UnitTests.csproj", "{724A4B30-9F25-43AA-9C52-61BD20915E29}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnitTests", "tests\Auction.UnitTests\UnitTests.csproj", "{724A4B30-9F25-43AA-9C52-61BD20915E29}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auction.IntegrationTests", "tests\Auction.IntegrationTests\Auction.IntegrationTests.csproj", "{2A64D44B-8BD8-46D3-BFD9-F05AF944F19E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IntegrationTests", "tests\Auction.IntegrationTests\IntegrationTests.csproj", "{2A64D44B-8BD8-46D3-BFD9-F05AF944F19E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auction.SimulationTests", "tests\Auction.SimulationTests\Auction.SimulationTests.csproj", "{EC84026D-4B46-4222-8044-78585D66CC0B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimulationTests", "tests\Auction.SimulationTests\SimulationTests.csproj", "{EC84026D-4B46-4222-8044-78585D66CC0B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

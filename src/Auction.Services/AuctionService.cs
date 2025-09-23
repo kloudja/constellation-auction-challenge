@@ -1,0 +1,162 @@
+﻿using Domain;
+using Domain.Events;
+using Domain.Abstractions;
+using Domain.Model;
+using System;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Linq;
+
+namespace Services;
+
+/// <summary>
+/// Core service:
+/// - PlaceBid: one transaction => insert Bid, CAS update Auction, append EventStore, enqueue Outbox
+/// - GetAuction: not implemented here (would switch between write/replica by consistency)
+/// - ReconcileAuction: read EventStore since checkpoint, rebuild winner deterministically, write checkpoint
+/// </summary>
+public sealed class AuctionService : IAuctionService
+{
+    private readonly Region _localRegion;
+    private readonly IAuctionRepository _auctionRepo;
+    private readonly IBidRepository _bidRepo;
+    private readonly IBidOrderingService _ordering;
+    private readonly IEventStoreRepository _store;
+    private readonly IEventOutboxRepository _outbox;
+    private readonly IReconciliationCheckpointRepository _cp;
+
+    public AuctionService(
+        string localRegion,
+        IAuctionRepository auctionRepo,
+        IBidRepository bidRepo,
+        IBidOrderingService ordering,
+        IEventStoreRepository store,
+        IEventOutboxRepository outbox,
+        IReconciliationCheckpointRepository cp)
+    {
+        _localRegion = Enum.Parse<Region>(localRegion);
+        _auctionRepo = auctionRepo;
+        _bidRepo = bidRepo;
+        _ordering = ordering;
+        _store = store;
+        _outbox = outbox;
+        _cp = cp;
+    }
+
+    public async Task<Auction> CreateAuctionAsync(CreateAuctionRequest request)
+    {
+        var a = new Auction
+        {
+            Id = Guid.NewGuid(),
+            OwnerRegionId = _localRegion,
+            State = AuctionState.Draft,
+            EndsAtUtc = request.EndsAtUtc,
+            CurrentHighBid = null,
+            CurrentSeq = 0,
+            RowVersion = 0,
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow
+        };
+        await _auctionRepo.InsertAsync(a);
+        return a;
+    }
+
+    public async Task<BidResult> PlaceBidAsync(string auctionIdStr, BidRequest request)
+    {
+        var now = DateTime.UtcNow;
+        if (!Guid.TryParse(auctionIdStr, out var auctionId))
+            return new BidResult(false, null, "Invalid auction id");
+
+        var a = await _auctionRepo.GetAsync(auctionId, forUpdate: true);
+        if (a is null) return new BidResult(false, null, "Auction not found");
+        if (a.State is not (AuctionState.Active or AuctionState.Ending)) return new BidResult(false, null, "Auction not accepting bids");
+        if (now > a.EndsAtUtc) return new BidResult(false, null, "Auction already ended");
+
+        // 1) Get next local sequence (producer-side monotonic)
+        var nextSeq = await _ordering.GetNextBidSequenceAsync(auctionIdStr);
+
+        var bid = new Bid
+        {
+            Id = Guid.NewGuid(),
+            AuctionId = auctionId,
+            Amount = request.Amount,
+            Sequence = nextSeq,
+            SourceRegionId = _localRegion,
+            CreatedAtUtc = now,
+            PartitionFlag = false, // RegionCoordinator may set this if partitioned
+            UpdatedAtUtc = now
+        };
+
+        // 2) Insert bid (ensure uniqueness per (AuctionId, SourceRegionId, Sequence))
+        if (await _bidRepo.ExistsAsync(auctionId, bid.SourceRegionId, bid.Sequence))
+            return new BidResult(false, null, "Duplicate sequence in source region");
+
+        await _bidRepo.InsertAsync(bid);
+
+        // 3) CAS update auction amounts
+        var expected = a.RowVersion;
+        var newHigh = Math.Max(a.CurrentHighBid ?? 0m, bid.Amount);
+        var ok = await _auctionRepo.TryUpdateAmountsAsync(auctionId, newHigh, nextSeq, expected);
+        if (!ok) return new BidResult(false, null, "Concurrency conflict");
+
+        // 4) Build event and persist in EventStore + Outbox
+        var evId = Guid.NewGuid();
+        var payload = new BidPlacedPayload(bid.Id, bid.AuctionId, bid.Amount, bid.Sequence, bid.SourceRegionId.ToString(), bid.CreatedAtUtc, bid.PartitionFlag);
+        var json = JsonSerializer.Serialize(payload);
+
+        var envelope = new EventEnvelope(
+            evId,
+            _localRegion.ToString(),
+            "BidPlaced",
+            auctionId,
+            json,
+            CreatedAtUtc: now);
+
+        await _store.AppendAsync(envelope);
+        await _outbox.EnqueueAsync(
+            outboxId: Guid.NewGuid(),
+            eventId: evId,
+            auctionId: auctionId,
+            aggregateType: "Auction",
+            eventType: envelope.EventType,
+            payloadJson: json,
+            createdAtUtc: now);
+
+        return new BidResult(true, nextSeq, "Accepted");
+    }
+
+    public Task<Auction> GetAuctionAsync(string auctionId, ConsistencyLevel consistency)
+    {
+        // Intentionally omitted: in infra you'd route to Write DB (Strong) or Replica (Eventual).
+        throw new NotImplementedException();
+    }
+
+    public async Task<ReconciliationResult> ReconcileAuctionAsync(string auctionIdStr)
+    {
+        if (!Guid.TryParse(auctionIdStr, out var auctionId))
+            throw new ArgumentException("invalid id");
+
+        var a = await _auctionRepo.GetAsync(auctionId);
+        if (a is null) throw new InvalidOperationException("Auction not found");
+
+        // Determine starting point from checkpoint
+        var cp = await _cp.GetAsync(auctionId);
+        var since = await _store.ResolveCreatedAtAsync(cp?.LastEventId);
+
+        // Read events since checkpoint (ordered)
+        var events = await _store.QuerySinceAsync(auctionId, since);
+
+        // Apply only events that affect winner/high bid (BidPlaced, etc.)
+        var knownBids = await _bidRepo.GetAllForAuctionAsync(auctionId);
+        // In a richer impl you could rebuild from scratch. Here we reuse current bids.
+
+        var winner = ConflictResolver.DecideWinner(a, knownBids);
+        await _auctionRepo.SaveWinnerAsync(auctionId, winner);
+
+        // Advance checkpoint to the last processed event (if any)
+        var last = events.LastOrDefault();
+        await _cp.UpsertAsync(auctionId, last?.EventId, DateTime.UtcNow);
+
+        return new ReconciliationResult(auctionId, winner);
+    }
+}

@@ -21,9 +21,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Auction.Domain\Auction.Domain.csproj" />
-    <ProjectReference Include="..\..\src\Auction.Services\Auction.Services.csproj" />
-    <ProjectReference Include="..\..\src\Auction.Eventing\Auction.Eventing.csproj" />
+    <ProjectReference Include="..\..\src\Auction.Domain\Domain.csproj" />
+    <ProjectReference Include="..\..\src\Auction.Services\Services.csproj" />
+    <ProjectReference Include="..\..\src\Auction.Eventing\Eventing.csproj" />
   </ItemGroup>
 
 </Project>
