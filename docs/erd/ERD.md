@@ -1,4 +1,4 @@
-﻿# ERD â€” Core Domain & Eventing
+﻿# ERD & Core Domain & Eventing
 
 ## Core Domain (Region, Vehicle, Auction, Bid)
 ```mermaid
@@ -62,11 +62,12 @@ erDiagram
   AUCTION ||--o{ EVENT_STORE  : emits
   EVENT_STORE }o--|| APPLIED_EVENT : dedupe
   AUCTION ||--o| RECONCILIATION_CP : checkpoint
+  REGION ||--o{ PARTITION_LOG : records
 
   EVENT_OUTBOX {
     uuid     Id PK
     string   AggregateType
-    uuid     AuctionId
+    uuid     AggregateId
     string   EventType
     string   PayloadJson
     datetime CreatedAtUtc
@@ -78,8 +79,8 @@ erDiagram
 
   EVENT_STORE {
     string   EventId PK
-    string   ProducerRegionId
-    uuid     AuctionId
+    string   RegionId
+    uuid     AggregateId
     string   EventType
     string   PayloadJson
     datetime CreatedAtUtc
@@ -99,6 +100,36 @@ erDiagram
     uuid     AuctionId PK
     string   LastEventId
     datetime LastRunAtUtc
+    datetime CreatedAtUtc
+    datetime UpdatedAtUtc
+    datetime DeletedAtUtc
+  }
+
+  PARTITION_LOG {
+    uuid     Id PK
+    string   FromRegionId
+    string   ToRegionId
+    datetime StartedAtUtc
+    datetime HealedAtUtc
+    datetime CreatedAtUtc
+    datetime UpdatedAtUtc
+    datetime DeletedAtUtc
+  }
+```
+## Audit
+```mermaid
+erDiagram
+  AUCTION ||--o{ AUDIT_LOG : audited_by
+  BID     ||--o{ AUDIT_LOG : audited_by
+  VEHICLE ||--o{ AUDIT_LOG : audited_by
+
+  AUDIT_LOG {
+    uuid     Id PK
+    string   EntityType
+    string   EntityId
+    string   Action
+    string   PayloadJson
+    datetime AtUtc
     datetime CreatedAtUtc
     datetime UpdatedAtUtc
     datetime DeletedAtUtc

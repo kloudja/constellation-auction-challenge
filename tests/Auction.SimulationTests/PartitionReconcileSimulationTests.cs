@@ -52,7 +52,10 @@ public class PartitionReconcileSimulationTests
         public readonly Queue<(string Producer, Guid EventId, Guid AuctionId, string EventType, string Payload)> Buffer = new();
         public void Send(string producer, Guid evtId, Guid auctionId, string type, string payload)
         {
-            if (State == LinkState.Partitioned) Buffer.Enqueue((producer, evtId, auctionId, type, payload));
+            if (this.State == LinkState.Partitioned)
+            {
+                this.Buffer.Enqueue((producer, evtId, auctionId, type, payload));
+            }
             // In real Connected mode we'd immediately deliver to the other side.
         }
     }
@@ -67,7 +70,9 @@ public class PartitionReconcileSimulationTests
         public RegionRuntime(string id) => Id = id;
 
         public void CreateAuction(Guid id, decimal currentHigh, long currentSeq)
-            => _auctions[id] = new Domain.Auction { Id = id, OwnerRegionId = "US", State = "Active", CurrentHighBid = currentHigh, CurrentSeq = currentSeq, RowVersion = 1 };
+        {
+            _auctions[id] = new Domain.Auction { Id = id, OwnerRegionId = "US", State = "Active", CurrentHighBid = currentHigh, CurrentSeq = currentSeq, RowVersion = 1 };
+        }
 
         public Guid PlaceBid(Guid auctionId, decimal amount, string sourceRegion, InterRegionChannel link)
         {
