@@ -9,3 +9,4 @@ TestResults/
 .idea/
 .local/
 *.DS_Store
+/.vs/Constellation.Auctions
