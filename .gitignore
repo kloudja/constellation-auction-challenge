@@ -10,3 +10,4 @@ TestResults/
 .local/
 *.DS_Store
 /.vs/Constellation.Auctions
+/.vs
