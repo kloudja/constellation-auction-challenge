@@ -1,0 +1,11 @@
+﻿bin/
+obj/
+*.user
+*.suo
+*.cache
+*.log
+TestResults/
+.vscode/
+.idea/
+.local/
+*.DS_Store
