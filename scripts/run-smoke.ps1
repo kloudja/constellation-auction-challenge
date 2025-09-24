@@ -1,0 +1,1 @@
+.\scripts\run-tests.ps1 -Filter "FullyQualifiedName~EndToEndSmokeTests&Name~PlaceBid_Publish_Forward_Apply_Reconcile"
