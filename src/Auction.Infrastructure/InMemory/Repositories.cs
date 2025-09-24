@@ -21,7 +21,10 @@ public sealed class InMemoryAuctionRepository : IAuctionRepository
         => Task.FromResult(_mem.TryGetValue(id, out var a) ? a : null);
 
     public Task InsertAsync(Auction auction, CancellationToken ct = default)
-    { _mem[auction.Id] = auction; return Task.CompletedTask; }
+    {
+        _mem[auction.Id] = auction;
+        return Task.CompletedTask;
+    }
 
     public Task<bool> TryUpdateAmountsAsync(Guid id, decimal newHigh, long newSeq, long expectedRowVersion, CancellationToken ct = default)
     {

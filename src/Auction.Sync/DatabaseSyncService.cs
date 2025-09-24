@@ -60,7 +60,7 @@ public sealed class DatabaseSyncService : IDisposable
     /// </summary>
     public async Task<int> DrainAndApplyAsync(CancellationToken ct = default)
     {
-        var toRegion = _localRegion; // "EU" drains US->EU, "US" drains EU->US
+        var toRegion = _localRegion /*== Region.EU.ToString() ? Region.US.ToString() : Region.EU.ToString()*/; // "EU" drains US->EU, "US" drains EU->US
         var cnt = 0;
         foreach (var e in _link.DrainTo(toRegion))
         {
@@ -68,6 +68,55 @@ public sealed class DatabaseSyncService : IDisposable
 
             switch (e.EventType)
             {
+                case "AuctionCreated":
+                    {
+                        var ac = JsonSerializer.Deserialize<AuctionCreatedPayload>(e.PayloadJson)!;
+
+                        // Upsert mirror auction (idempotent)
+                        var existing = await _auctions.GetAsync(ac.AuctionId);
+                        if (existing is null)
+                        {
+                            var mirror = new Auction
+                            {
+                                Id = ac.AuctionId,
+                                OwnerRegionId = Enum.Parse<Region>(ac.OwnerRegionId),
+                                State = AuctionState.Draft,
+                                EndsAtUtc = ac.EndsAtUtc,
+                                CurrentHighBid = null,
+                                CurrentSeq = 0,
+                                RowVersion = 0,
+                                CreatedAtUtc = ac.CreatedAtUtc,
+                                UpdatedAtUtc = DateTime.UtcNow
+                            };
+                            await _auctions.InsertAsync(mirror, ct);
+                        }
+
+                        await _applied.MarkAppliedAsync(e.EventId, DateTime.UtcNow, ct);
+                        await _store.AppendAsync(e, ct);
+                        cnt++;
+                        break;
+                    }
+                case "AuctionActivated":
+                    {
+                        var aa = JsonSerializer.Deserialize<AuctionActivatedPayload>(e.PayloadJson)!;
+
+                        // Ensure exists and set Active
+                        var a = await _auctions.GetAsync(aa.AuctionId) ?? new Auction
+                        {
+                            Id = aa.AuctionId,
+                            OwnerRegionId = Enum.Parse<Region>(aa.OwnerRegionId),
+                            EndsAtUtc = aa.EndsAtUtc,
+                            CreatedAtUtc = aa.CreatedAtUtc
+                        };
+                        a.State = AuctionState.Active;
+                        a.UpdatedAtUtc = DateTime.UtcNow;
+                        await _auctions.InsertAsync(a, ct); // in-memory upsert
+
+                        await _applied.MarkAppliedAsync(e.EventId, DateTime.UtcNow, ct);
+                        await _store.AppendAsync(e, ct);
+                        cnt++;
+                        break;
+                    }
                 case "BidPlaced":
                     var bp = JsonSerializer.Deserialize<BidPlacedPayload>(e.PayloadJson)!;
 

@@ -20,3 +20,15 @@ public sealed record BidPlacedPayload(
     string SourceRegionId,
     DateTime CreatedAtUtc,
     bool PartitionFlag);
+
+public sealed record AuctionCreatedPayload(
+    Guid AuctionId,
+    string OwnerRegionId,
+    DateTime EndsAtUtc,
+    DateTime CreatedAtUtc);
+
+public sealed record AuctionActivatedPayload(
+    Guid AuctionId,
+    string OwnerRegionId,
+    DateTime EndsAtUtc,
+    DateTime CreatedAtUtc);

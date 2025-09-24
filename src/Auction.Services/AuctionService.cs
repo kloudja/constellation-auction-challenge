@@ -45,7 +45,8 @@ public sealed class AuctionService : IAuctionService
 
     public async Task<Auction> CreateAuctionAsync(CreateAuctionRequest request)
     {
-        var a = new Auction
+        var now = DateTime.UtcNow;
+        var newAuction = new Auction
         {
             Id = Guid.NewGuid(),
             OwnerRegionId = _localRegion,
@@ -57,8 +58,17 @@ public sealed class AuctionService : IAuctionService
             CreatedAtUtc = DateTime.UtcNow,
             UpdatedAtUtc = DateTime.UtcNow
         };
-        await _auctionRepo.InsertAsync(a);
-        return a;
+        await _auctionRepo.InsertAsync(newAuction);
+
+        var evId = Guid.NewGuid();
+        var payload = new AuctionCreatedPayload(newAuction.Id, newAuction.OwnerRegionId.ToString(), newAuction.EndsAtUtc, now);
+        var json = System.Text.Json.JsonSerializer.Serialize(payload);
+        var envelope = new EventEnvelope(evId, _localRegion.ToString(), "AuctionCreated", newAuction.Id, json, CreatedAtUtc: now);
+
+        await _store.AppendAsync(envelope);
+        await _outbox.EnqueueAsync(Guid.NewGuid(), evId, newAuction.Id, "Auction", envelope.EventType, json, now);
+
+        return newAuction;
     }
 
     public async Task<BidResult> PlaceBidAsync(string auctionIdStr, BidRequest request)
@@ -158,5 +168,29 @@ public sealed class AuctionService : IAuctionService
         await _cp.UpsertAsync(auctionId, last?.EventId, DateTime.UtcNow);
 
         return new ReconciliationResult(auctionId, winner);
+    }
+
+    public async Task ActivateAsync(Guid auctionId)
+    {
+        var now = DateTime.UtcNow;
+        var a = await _auctionRepo.GetAsync(auctionId, forUpdate: true)
+                ?? throw new InvalidOperationException("Auction not found");
+        if (a.State is AuctionState.Ended or AuctionState.Cancelled)
+            throw new InvalidOperationException("Cannot activate a finished auction");
+
+        // transition
+        a.State = AuctionState.Active;
+        a.UpdatedAtUtc = now;
+        // RowVersion bump será feito pelo repo se precisares; no in-memory é suficiente setar.
+        await _auctionRepo.InsertAsync(a); // in-memory “upsert”; num repo real seria Update
+
+        // emit AuctionActivated
+        var evId = Guid.NewGuid();
+        var payload = new AuctionActivatedPayload(a.Id, a.OwnerRegionId.ToString(), a.EndsAtUtc, now);
+        var json = System.Text.Json.JsonSerializer.Serialize(payload);
+        var envelope = new EventEnvelope(evId, _localRegion.ToString(), "AuctionActivated", a.Id, json, CreatedAtUtc: now);
+
+        await _store.AppendAsync(envelope);
+        await _outbox.EnqueueAsync(Guid.NewGuid(), evId, a.Id, "Auction", envelope.EventType, json, now);
     }
 }

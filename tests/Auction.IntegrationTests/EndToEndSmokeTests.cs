@@ -1,18 +1,19 @@
 ﻿using Domain;
-using Domain.Events;
-using Eventing;
-using Infrastructure.InMemory;
-using Services;
-using Sync;
 using Domain;
+using Domain.Events;
+using Domain.Model;
+using Eventing;
 using Eventing;
 using FluentAssertions;
+using Infrastructure.InMemory;
 using Services;
+using Services;
+using Sync;
 using System;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
-using System.Linq;
 
 namespace IntegrationTests;
 
@@ -27,61 +28,70 @@ public class EndToEndSmokeTests
         var link = new InterRegionChannel();
 
         // US infra
-        var usAuc = new InMemoryAuctionRepository();
-        var usBid = new InMemoryBidRepository();
-        var usStore = new InMemoryEventStoreRepository();
-        var usOutbox = new InMemoryOutboxRepository();
-        var usApplied = new InMemoryAppliedEventRepository();
-        var usCp = new InMemoryReconciliationCheckpointRepository();
+        var usAuctionRepository = new InMemoryAuctionRepository();
+        var usBidRepository = new InMemoryBidRepository();
+        var usEventStore = new InMemoryEventStoreRepository();
+        var usOutboxRepository = new InMemoryOutboxRepository();
+        var usAppliedEvents = new InMemoryAppliedEventRepository();
+        var usReconciliationRepository = new InMemoryReconciliationCheckpointRepository();
 
         // EU infra
-        var euAuc = new InMemoryAuctionRepository();
-        var euBid = new InMemoryBidRepository();
-        var euStore = new InMemoryEventStoreRepository();
-        var euOutbox = new InMemoryOutboxRepository();
-        var euApplied = new InMemoryAppliedEventRepository();
-        var euCp = new InMemoryReconciliationCheckpointRepository();
+        var euAuctionRepository = new InMemoryAuctionRepository();
+        var euBidRepository = new InMemoryBidRepository();
+        var euEventStore = new InMemoryEventStoreRepository();
+        var euOutboxRepository = new InMemoryOutboxRepository();
+        var euAppliedEvents = new InMemoryAppliedEventRepository();
+        var euReconciliationRepository = new InMemoryReconciliationCheckpointRepository();
 
         // Services
-        var usOrdering = new BidOrderingService();
-        var usSvc = new AuctionService("US", usAuc, usBid, usOrdering, usStore, usOutbox, usCp);
-        var usPublisher = new EventPublisher("US", usOutbox, usStore, busUS);
-        var usSync = new DatabaseSyncService("US", busUS, link, usApplied, usBid, usAuc, usStore);
+        var usBidOrderingService = new BidOrderingService();
+        var usAuctionService = new AuctionService("US", usAuctionRepository, usBidRepository, usBidOrderingService, usEventStore, usOutboxRepository, usReconciliationRepository);
+        var usPublisher = new EventPublisher("US", usOutboxRepository, usEventStore, busUS);
+        var usDatabaseSyncService = new DatabaseSyncService("US", busUS, link, usAppliedEvents, usBidRepository, usAuctionRepository, usEventStore);
 
-        var euOrdering = new BidOrderingService();
-        var euSvc = new AuctionService("EU", euAuc, euBid, euOrdering, euStore, euOutbox, euCp);
-        var euPublisher = new EventPublisher("EU", euOutbox, euStore, busEU);
-        var euSync = new DatabaseSyncService("EU", busEU, link, euApplied, euBid, euAuc, euStore);
+        var euBidOrderingService = new BidOrderingService();
+        var euAuctionService = new AuctionService("EU", euAuctionRepository, euBidRepository, euBidOrderingService, euEventStore, euOutboxRepository, euReconciliationRepository);
+        var euPublisher = new EventPublisher("EU", euOutboxRepository, euEventStore, busEU);
+        var euDatabaseSyncService = new DatabaseSyncService("EU", busEU, link, euAppliedEvents, euBidRepository, euAuctionRepository, euEventStore);
 
-        // Seed auction in US
-        var a = await usSvc.CreateAuctionAsync(new CreateAuctionRequest(Guid.NewGuid(), DateTime.UtcNow.AddMinutes(2)));
-        a.State = Domain.Model.AuctionState.Active; // shortcut for the test
-        await usAuc.InsertAsync(a); // persist state
+        // 1) US creates auction (emits AuctionCreated)
+        var a = await usAuctionService.CreateAuctionAsync(new CreateAuctionRequest(Guid.NewGuid(), DateTime.UtcNow.AddMinutes(2)));
 
-        // Partition
+        // 2) US publishes and EU consumes AuctionCreated (EU now has a mirror in Draft)
+        await usPublisher.PublishPendingAsync();
+        await euDatabaseSyncService.DrainAndApplyAsync();
+
+        (await euAuctionRepository.GetAsync(a.Id)).Should().NotBeNull();
+
+        // 3) US activates auction (emits AuctionActivated), publish → EU apply (EU mirror goes Active)
+        await usAuctionService.ActivateAsync(a.Id);
+        await usPublisher.PublishPendingAsync();
+        await euDatabaseSyncService.DrainAndApplyAsync();
+
+        var mirror = await euAuctionRepository.GetAsync(a.Id);
+        mirror!.State.Should().Be(AuctionState.Active);
+
+        // 4) Partition starts AFTER both sides know the auction is Active
         link.SetState(LinkState.Partitioned);
 
-        // Place bids: US(310), EU(300) on the same auction
-        (await usSvc.PlaceBidAsync(a.Id.ToString(), new BidRequest(310, "US"))).Accepted.Should().BeTrue();
-        (await euSvc.PlaceBidAsync(a.Id.ToString(), new BidRequest(300, "EU"))).Accepted.Should().BeTrue();
+        // 5) Place bids on both sides while partitioned
+        (await usAuctionService.PlaceBidAsync(a.Id.ToString(), new BidRequest(310, "US"))).Accepted.Should().BeTrue();
+        (await euAuctionService.PlaceBidAsync(a.Id.ToString(), new BidRequest(300, "EU"))).Accepted.Should().BeTrue();
 
-        // Publish locally (still partitioned; events buffered in the channel)
+        // 6) Publish locally (events buffered in inter-region channel)
         await usPublisher.PublishPendingAsync();
         await euPublisher.PublishPendingAsync();
 
-        // Heal
+        // 7) Heal link and drain/apply on both sides (idempotent)
         link.SetState(LinkState.Connected);
+        await euDatabaseSyncService.DrainAndApplyAsync();
+        await usDatabaseSyncService.DrainAndApplyAsync();
 
-        // Drain + apply on both sides (idempotent)
-        await usSync.DrainAndApplyAsync();
-        await euSync.DrainAndApplyAsync();
-
-        // Reconcile on owner (US)
-        var result = await usSvc.ReconcileAuctionAsync(a.Id.ToString());
+        // 8) Reconcile on owner (US)
+        var result = await usAuctionService.ReconcileAuctionAsync(a.Id.ToString());
         result.WinnerBidId.Should().NotBeNull();
 
-        // Winner should be the US(310) bid as per deterministic rules
-        var allBidsUS = await usBid.GetAllForAuctionAsync(a.Id);
+        var allBidsUS = await usBidRepository.GetAllForAuctionAsync(a.Id);
         var winner = allBidsUS.Single(b => b.Id == result.WinnerBidId);
         winner.Amount.Should().Be(310m);
     }
