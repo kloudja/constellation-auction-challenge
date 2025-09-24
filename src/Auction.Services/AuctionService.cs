@@ -25,6 +25,7 @@ public sealed class AuctionService : IAuctionService
     private readonly IEventOutboxRepository _outbox;
     private readonly IReconciliationCheckpointRepository _cp;
     private readonly IAuctionReadReplica _auctionReadReplica;
+    private readonly IVehicleRepository _vehicleRepo;
 
     public AuctionService(
         string localRegion,
@@ -34,7 +35,8 @@ public sealed class AuctionService : IAuctionService
         IEventStoreRepository store,
         IEventOutboxRepository outbox,
         IReconciliationCheckpointRepository cp,
-        IAuctionReadReplica auctionReadReplica)
+        IAuctionReadReplica auctionReadReplica,
+        IVehicleRepository vehicleRepo)
     {
         _localRegion = Enum.Parse<Region>(localRegion);
         _auctionRepo = auctionRepo;
@@ -44,11 +46,20 @@ public sealed class AuctionService : IAuctionService
         _outbox = outbox;
         _cp = cp;
         _auctionReadReplica = auctionReadReplica;
+        _vehicleRepo = vehicleRepo;
     }
 
     public async Task<Auction> CreateAuctionAsync(CreateAuctionRequest request)
     {
         var now = DateTime.UtcNow;
+
+        var vehicle = await _vehicleRepo.GetAsync(request.VehicleId)
+             ?? throw new InvalidOperationException("Vehicle not found");
+        if (!string.Equals(vehicle.RegionId, _localRegion.ToString(), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Auction owner region must match vehicle region.");
+
+        var vehSnap = new VehicleSnapshot(vehicle.VehicleType, vehicle.Make, vehicle.Model, vehicle.Year);
+
         var newAuction = new Auction
         {
             Id = Guid.NewGuid(),
@@ -64,7 +75,7 @@ public sealed class AuctionService : IAuctionService
         await _auctionRepo.InsertAsync(newAuction);
 
         var evId = Guid.NewGuid();
-        var payload = new AuctionCreatedPayload(newAuction.Id, newAuction.OwnerRegionId.ToString(), newAuction.EndsAtUtc, now);
+        var payload = new AuctionCreatedPayload(newAuction.Id, newAuction.OwnerRegionId.ToString(), newAuction.EndsAtUtc, vehSnap, now);
         var json = System.Text.Json.JsonSerializer.Serialize(payload);
         var envelope = new EventEnvelope(evId, _localRegion.ToString(), "AuctionCreated", newAuction.Id, json, CreatedAtUtc: now);
 

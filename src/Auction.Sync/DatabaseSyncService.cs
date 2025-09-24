@@ -58,7 +58,7 @@ public sealed class DatabaseSyncService : IDisposable
     public async Task<int> DrainAndApplyAsync(CancellationToken ct = default)
     {
         var toRegion = _localRegion /*== Region.EU.ToString() ? Region.US.ToString() : Region.EU.ToString()*/; // "EU" drains US->EU, "US" drains EU->US
-        var cnt = 0;
+        var eventsApplied = 0;
         foreach (var e in _link.DrainTo(toRegion))
         {
             if (await _applied.IsAppliedAsync(e.EventId, ct)) continue;
@@ -67,67 +67,63 @@ public sealed class DatabaseSyncService : IDisposable
             {
                 case "AuctionCreated":
                     {
-                        var ac = JsonSerializer.Deserialize<AuctionCreatedPayload>(e.PayloadJson)!;
-
-                        // Upsert mirror auction (idempotent)
-                        var existing = await _auctions.GetAsync(ac.AuctionId);
+                        var auctionCreatedPayload = JsonSerializer.Deserialize<AuctionCreatedPayload>(e.PayloadJson)!;
+                        var existing = await _auctions.GetAsync(auctionCreatedPayload.AuctionId);
                         if (existing is null)
                         {
                             var mirror = new Auction
                             {
-                                Id = ac.AuctionId,
-                                OwnerRegionId = Enum.Parse<Region>(ac.OwnerRegionId),
+                                Id = auctionCreatedPayload.AuctionId,
+                                OwnerRegionId = Enum.Parse<Region>(auctionCreatedPayload.OwnerRegionId),
                                 State = AuctionState.Draft,
-                                EndsAtUtc = ac.EndsAtUtc,
+                                EndsAtUtc = auctionCreatedPayload.EndsAtUtc,
                                 CurrentHighBid = null,
                                 CurrentSeq = 0,
                                 RowVersion = 0,
-                                CreatedAtUtc = ac.CreatedAtUtc,
-                                UpdatedAtUtc = DateTime.UtcNow
+                                CreatedAtUtc = auctionCreatedPayload.CreatedAtUtc,
+                                UpdatedAtUtc = DateTime.UtcNow,
                             };
                             await _auctions.InsertAsync(mirror, ct);
                         }
-
                         await _applied.MarkAppliedAsync(e.EventId, DateTime.UtcNow, ct);
                         await _store.AppendAsync(e, ct);
-                        cnt++;
+                        eventsApplied++;
                         break;
                     }
                 case "AuctionActivated":
                     {
-                        var aa = JsonSerializer.Deserialize<AuctionActivatedPayload>(e.PayloadJson)!;
+                        var auctionActivatedPayload = JsonSerializer.Deserialize<AuctionActivatedPayload>(e.PayloadJson)!;
 
-                        // Ensure exists and set Active
-                        var a = await _auctions.GetAsync(aa.AuctionId) ?? new Auction
+                        var existingAuction = await _auctions.GetAsync(auctionActivatedPayload.AuctionId) ?? new Auction
                         {
-                            Id = aa.AuctionId,
-                            OwnerRegionId = Enum.Parse<Region>(aa.OwnerRegionId),
-                            EndsAtUtc = aa.EndsAtUtc,
-                            CreatedAtUtc = aa.CreatedAtUtc
+                            Id = auctionActivatedPayload.AuctionId,
+                            OwnerRegionId = Enum.Parse<Region>(auctionActivatedPayload.OwnerRegionId),
+                            EndsAtUtc = auctionActivatedPayload.EndsAtUtc,
+                            CreatedAtUtc = auctionActivatedPayload.CreatedAtUtc
                         };
-                        a.State = AuctionState.Active;
-                        a.UpdatedAtUtc = DateTime.UtcNow;
-                        await _auctions.InsertAsync(a, ct); // in-memory upsert
+                        existingAuction.State = AuctionState.Active;
+                        existingAuction.UpdatedAtUtc = DateTime.UtcNow;
+                        await _auctions.InsertAsync(existingAuction, ct); 
 
                         await _applied.MarkAppliedAsync(e.EventId, DateTime.UtcNow, ct);
                         await _store.AppendAsync(e, ct);
-                        cnt++;
+                        eventsApplied++;
                         break;
                     }
                 case "BidPlaced":
-                    var bp = JsonSerializer.Deserialize<BidPlacedPayload>(e.PayloadJson)!;
+                    var bidPlacedPayload = JsonSerializer.Deserialize<BidPlacedPayload>(e.PayloadJson)!;
 
-                    if (!await _bids.ExistsAsync(bp.AuctionId, Enum.Parse<Region>(bp.SourceRegionId), bp.Sequence))
+                    if (!await _bids.ExistsAsync(bidPlacedPayload.AuctionId, Enum.Parse<Region>(bidPlacedPayload.SourceRegionId), bidPlacedPayload.Sequence))
                     {
                         var bid = new Bid
                         {
-                            Id = bp.BidId,
-                            AuctionId = bp.AuctionId,
-                            Amount = bp.Amount,
-                            Sequence = bp.Sequence,
-                            SourceRegionId = Enum.Parse<Region>(bp.SourceRegionId),
-                            CreatedAtUtc = bp.CreatedAtUtc,
-                            PartitionFlag = bp.PartitionFlag,
+                            Id = bidPlacedPayload.BidId,
+                            AuctionId = bidPlacedPayload.AuctionId,
+                            Amount = bidPlacedPayload.Amount,
+                            Sequence = bidPlacedPayload.Sequence,
+                            SourceRegionId = Enum.Parse<Region>(bidPlacedPayload.SourceRegionId),
+                            CreatedAtUtc = bidPlacedPayload.CreatedAtUtc,
+                            PartitionFlag = bidPlacedPayload.PartitionFlag,
                             UpdatedAtUtc = DateTime.UtcNow
                         };
                         await _bids.InsertAsync(bid, ct);
@@ -135,14 +131,14 @@ public sealed class DatabaseSyncService : IDisposable
 
                     await _applied.MarkAppliedAsync(e.EventId, DateTime.UtcNow, ct);
                     await _store.AppendAsync(e, ct);
-                    cnt++;
+                    eventsApplied++;
                     break;
 
                 default:
                     break;
             }
         }
-        return cnt;
+        return eventsApplied;
     }
 
     public void Dispose() => _subscription.Dispose();
