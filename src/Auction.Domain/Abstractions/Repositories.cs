@@ -53,3 +53,15 @@ public interface IReconciliationCheckpointRepository
     Task UpsertAsync(Guid auctionId, Guid? lastEventId, DateTime lastRunAtUtc, CancellationToken ct = default);
 }
 public sealed record ReconciliationCp(Guid AuctionId, Guid? LastEventId, DateTime? LastRunAtUtc);
+
+public interface IVehicleRepository
+{
+    Task<Vehicle?> GetAsync(Guid id, CancellationToken ct = default);
+    Task<IReadOnlyList<Vehicle>> ListByRegionAsync(string regionId, CancellationToken ct = default);
+    Task InsertAsync(Vehicle vehicle, CancellationToken ct = default);
+    Task UpdateAsync(Vehicle vehicle, CancellationToken ct = default);
+    Task SoftDeleteAsync(Guid id, CancellationToken ct = default);
+}
+
+public sealed record CreateVehicleRequest(string RegionId, string VehicleType, string Make, string Model, int Year);
+public sealed record UpdateVehicleRequest(Guid VehicleId, string Make, string Model, int Year);

@@ -24,6 +24,7 @@ public sealed class AuctionService : IAuctionService
     private readonly IEventStoreRepository _store;
     private readonly IEventOutboxRepository _outbox;
     private readonly IReconciliationCheckpointRepository _cp;
+    private readonly IAuctionReadReplica _auctionReadReplica;
 
     public AuctionService(
         string localRegion,
@@ -32,7 +33,8 @@ public sealed class AuctionService : IAuctionService
         IBidOrderingService ordering,
         IEventStoreRepository store,
         IEventOutboxRepository outbox,
-        IReconciliationCheckpointRepository cp)
+        IReconciliationCheckpointRepository cp,
+        IAuctionReadReplica auctionReadReplica)
     {
         _localRegion = Enum.Parse<Region>(localRegion);
         _auctionRepo = auctionRepo;
@@ -41,6 +43,7 @@ public sealed class AuctionService : IAuctionService
         _store = store;
         _outbox = outbox;
         _cp = cp;
+        _auctionReadReplica = auctionReadReplica;
     }
 
     public async Task<Auction> CreateAuctionAsync(CreateAuctionRequest request)
@@ -135,10 +138,19 @@ public sealed class AuctionService : IAuctionService
         return new BidResult(true, nextSeq, "Accepted");
     }
 
-    public Task<Auction> GetAuctionAsync(string auctionId, ConsistencyLevel consistency)
+    public async Task<Auction> GetAuctionAsync(string auctionId, ConsistencyLevel consistency)
     {
-        // Intentionally omitted: in infra you'd route to Write DB (Strong) or Replica (Eventual).
-        throw new NotImplementedException();
+        if (!Guid.TryParse(auctionId, out Guid parsedId))
+            throw new ArgumentException("Invalid auction id.");
+
+        return consistency switch
+        {
+            ConsistencyLevel.Strong => await _auctionRepo.GetAsync(parsedId)
+                                       ?? throw new InvalidOperationException("Auction not found"),
+            ConsistencyLevel.Eventual => await _auctionReadReplica.GetFromReplicaAsync(parsedId)
+                                         ?? throw new InvalidOperationException("Auction not found (replica)"),
+            _ => throw new ArgumentOutOfRangeException(nameof(consistency))
+        };
     }
 
     public async Task<ReconciliationResult> ReconcileAuctionAsync(string auctionIdStr)

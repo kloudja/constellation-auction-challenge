@@ -1,9 +1,6 @@
-﻿using Domain;
-using Domain.Events;
+﻿using Domain.Events;
 using Domain.Abstractions;
-using Domain.Events;
 using Domain.Model;
-using Sync;
 using System;
 using System.Text.Json;
 using System.Threading;

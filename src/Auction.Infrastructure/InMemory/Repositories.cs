@@ -1,7 +1,5 @@
-﻿using Domain;
-using Domain.Events;
+﻿using Domain.Events;
 using Domain.Abstractions;
-using Domain.Events;
 using Domain.Model;
 using System;
 using System.Collections.Concurrent;

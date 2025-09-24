@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\Auction.Domain\Domain.csproj" />
     <ProjectReference Include="..\..\src\Auction.Services\Services.csproj" />
     <ProjectReference Include="..\..\src\Auction.Eventing\Eventing.csproj" />
+    <ProjectReference Include="..\..\src\Auction.Sync\Sync.csproj" />
   </ItemGroup>
 
 </Project>

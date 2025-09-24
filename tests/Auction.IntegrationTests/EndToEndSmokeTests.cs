@@ -1,17 +1,12 @@
 ﻿using Domain;
-using Domain;
-using Domain.Events;
 using Domain.Model;
-using Eventing;
 using Eventing;
 using FluentAssertions;
 using Infrastructure.InMemory;
 using Services;
-using Services;
 using Sync;
 using System;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -34,6 +29,7 @@ public class EndToEndSmokeTests
         var usOutboxRepository = new InMemoryOutboxRepository();
         var usAppliedEvents = new InMemoryAppliedEventRepository();
         var usReconciliationRepository = new InMemoryReconciliationCheckpointRepository();
+        var usReadReplica = new InMemoryLaggedAuctionReplica(usAuctionRepository, TimeSpan.FromMilliseconds(500));
 
         // EU infra
         var euAuctionRepository = new InMemoryAuctionRepository();
@@ -42,15 +38,16 @@ public class EndToEndSmokeTests
         var euOutboxRepository = new InMemoryOutboxRepository();
         var euAppliedEvents = new InMemoryAppliedEventRepository();
         var euReconciliationRepository = new InMemoryReconciliationCheckpointRepository();
+        var euReadReplica = new InMemoryLaggedAuctionReplica(usAuctionRepository, TimeSpan.FromMilliseconds(500));
 
         // Services
-        var usBidOrderingService = new BidOrderingService();
-        var usAuctionService = new AuctionService("US", usAuctionRepository, usBidRepository, usBidOrderingService, usEventStore, usOutboxRepository, usReconciliationRepository);
+        var usBidOrderingService = new BidOrderingService(usBidRepository);
+        var usAuctionService = new AuctionService("US", usAuctionRepository, usBidRepository, usBidOrderingService, usEventStore, usOutboxRepository, usReconciliationRepository, usReadReplica);
         var usPublisher = new EventPublisher("US", usOutboxRepository, usEventStore, busUS);
         var usDatabaseSyncService = new DatabaseSyncService("US", busUS, link, usAppliedEvents, usBidRepository, usAuctionRepository, usEventStore);
 
-        var euBidOrderingService = new BidOrderingService();
-        var euAuctionService = new AuctionService("EU", euAuctionRepository, euBidRepository, euBidOrderingService, euEventStore, euOutboxRepository, euReconciliationRepository);
+        var euBidOrderingService = new BidOrderingService(euBidRepository);
+        var euAuctionService = new AuctionService("EU", euAuctionRepository, euBidRepository, euBidOrderingService, euEventStore, euOutboxRepository, euReconciliationRepository, euReadReplica);
         var euPublisher = new EventPublisher("EU", euOutboxRepository, euEventStore, busEU);
         var euDatabaseSyncService = new DatabaseSyncService("EU", busEU, link, euAppliedEvents, euBidRepository, euAuctionRepository, euEventStore);
 
