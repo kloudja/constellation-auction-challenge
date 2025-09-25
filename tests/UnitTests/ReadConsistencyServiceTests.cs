@@ -21,6 +21,19 @@ public class ReadConsistencyServiceTests
         InMemoryOutboxRepository eventOutboxRepository = new();
         InMemoryReconciliationCheckpointRepository reconciliationCheckpointRepository = new();
         InMemoryLaggedAuctionReplica readReplica = new(writeAuctionRepository, lag: TimeSpan.FromMilliseconds(500));
+        InMemoryVehicleRepository inMemoryVehicleRepository = new(); 
+        var newVehicle = new Vehicle
+        {
+            Id = Guid.NewGuid(),
+            RegionId = "US",
+            VehicleType = "Sedan",
+            Make = "Toyota",
+            Model = "Camry",
+            Year = 2023,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        await inMemoryVehicleRepository.InsertAsync(newVehicle);
+
 
         BidOrderingService bidOrderingService = new(writeBidRepository);
         AuctionService auctionService = new(
@@ -31,10 +44,11 @@ public class ReadConsistencyServiceTests
             store: eventStoreRepository,
             outbox: eventOutboxRepository,
             cp: reconciliationCheckpointRepository,
-            auctionReadReplica: readReplica);
+            auctionReadReplica: readReplica,
+            inMemoryVehicleRepository);
 
         // Create and activate auction
-        Auction createdAuction = await auctionService.CreateAuctionAsync(new CreateAuctionRequest(Guid.NewGuid(), DateTime.UtcNow.AddMinutes(5)));
+        Auction createdAuction = await auctionService.CreateAuctionAsync(new CreateAuctionRequest(newVehicle.Id, DateTime.UtcNow.AddMinutes(5)));
         await auctionService.ActivateAsync(createdAuction.Id);
 
         // Act: Update CurrentHighBid via PlaceBid to change write-side state

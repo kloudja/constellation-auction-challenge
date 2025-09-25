@@ -34,5 +34,4 @@ public sealed record AuctionActivatedPayload(
     Guid AuctionId,
     string OwnerRegionId,
     DateTime EndsAtUtc,
-    VehicleSnapshot Vehicle,
     DateTime CreatedAtUtc);

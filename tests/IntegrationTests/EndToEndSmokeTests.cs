@@ -1,4 +1,5 @@
 ﻿using Domain;
+using Domain.Abstractions;
 using Domain.Model;
 using Eventing;
 using FluentAssertions;
@@ -29,6 +30,7 @@ public class EndToEndSmokeTests
         var usOutboxRepository = new InMemoryOutboxRepository();
         var usAppliedEvents = new InMemoryAppliedEventRepository();
         var usReconciliationRepository = new InMemoryReconciliationCheckpointRepository();
+        var usVehicleRepository = new InMemoryVehicleRepository(); // NEW
         var usReadReplica = new InMemoryLaggedAuctionReplica(usAuctionRepository, TimeSpan.FromMilliseconds(500));
 
         // EU infra
@@ -38,21 +40,47 @@ public class EndToEndSmokeTests
         var euOutboxRepository = new InMemoryOutboxRepository();
         var euAppliedEvents = new InMemoryAppliedEventRepository();
         var euReconciliationRepository = new InMemoryReconciliationCheckpointRepository();
-        var euReadReplica = new InMemoryLaggedAuctionReplica(usAuctionRepository, TimeSpan.FromMilliseconds(500));
+        var euVehicleRepository = new InMemoryVehicleRepository(); // NEW
+        var euReadReplica = new InMemoryLaggedAuctionReplica(euAuctionRepository, TimeSpan.FromMilliseconds(500)); // FIX: use EU repo
 
         // Services
         var usBidOrderingService = new BidOrderingService(usBidRepository);
-        var usAuctionService = new AuctionService("US", usAuctionRepository, usBidRepository, usBidOrderingService, usEventStore, usOutboxRepository, usReconciliationRepository, usReadReplica);
+        var usAuctionService = new AuctionService(
+            "US",
+            usAuctionRepository,
+            usBidRepository,
+            usBidOrderingService,
+            usEventStore,
+            usOutboxRepository,
+            usReconciliationRepository,
+            usReadReplica,
+            usVehicleRepository); // NEW param
+
         var usPublisher = new EventPublisher("US", usOutboxRepository, usEventStore, busUS);
         var usDatabaseSyncService = new DatabaseSyncService("US", busUS, link, usAppliedEvents, usBidRepository, usAuctionRepository, usEventStore);
 
         var euBidOrderingService = new BidOrderingService(euBidRepository);
-        var euAuctionService = new AuctionService("EU", euAuctionRepository, euBidRepository, euBidOrderingService, euEventStore, euOutboxRepository, euReconciliationRepository, euReadReplica);
+        var euAuctionService = new AuctionService(
+            "EU",
+            euAuctionRepository,
+            euBidRepository,
+            euBidOrderingService,
+            euEventStore,
+            euOutboxRepository,
+            euReconciliationRepository,
+            euReadReplica,
+            euVehicleRepository); // NEW param (not strictly used, but required by ctor)
+
         var euPublisher = new EventPublisher("EU", euOutboxRepository, euEventStore, busEU);
         var euDatabaseSyncService = new DatabaseSyncService("EU", busEU, link, euAppliedEvents, euBidRepository, euAuctionRepository, euEventStore);
 
-        // 1) US creates auction (emits AuctionCreated)
-        var a = await usAuctionService.CreateAuctionAsync(new CreateAuctionRequest(Guid.NewGuid(), DateTime.UtcNow.AddMinutes(2)));
+        // Prepare: create a Vehicle in US (region-specific, not replicated)
+        var usVehicleService = new VehicleService(usVehicleRepository);
+        var usVehicle = await usVehicleService.CreateAsync(new CreateVehicleRequest("US", "SUV", "Toyota", "RAV4", 2022));
+
+        // 1) US creates auction (emits AuctionCreated) with Vehicle snapshot
+        var a = await usAuctionService.CreateAuctionAsync(
+            new CreateAuctionRequest(usVehicle.Id, DateTime.UtcNow.AddMinutes(2))); // FIX: VehicleId required
 
         // 2) US publishes and EU consumes AuctionCreated (EU now has a mirror in Draft)
         await usPublisher.PublishPendingAsync();

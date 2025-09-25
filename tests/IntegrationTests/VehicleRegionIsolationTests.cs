@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace Auction.IntegrationTests;
+namespace IntegrationTests;
 
 public class VehicleRegionIsolationTests
 {
