@@ -23,21 +23,39 @@ public sealed class InMemoryLaggedAuctionReplica(
                 return entry.Snapshot;
 
             var fresh = await _auctionRepository.GetAsync(id, forUpdate: false, ct).ConfigureAwait(false);
-            _cache[id] = (fresh, now);
-            return fresh;
+            var snap = fresh is null ? null : Clone(fresh);
+            _cache[id] = (snap, now);
+            return snap;
         }
 
         if (_coldStart)
             return null;
 
         var fetched = await _auctionRepository.GetAsync(id, forUpdate: false, ct).ConfigureAwait(false);
-        _cache[id] = (fetched, now);
-        return fetched;
+        var firstSnap = fetched is null ? null : Clone(fetched);
+        _cache[id] = (firstSnap, now);
+        return firstSnap;
     }
 
     public async Task ForceRefreshAsync(Guid id, CancellationToken ct = default)
     {
         var fresh = await _auctionRepository.GetAsync(id, forUpdate: false, ct).ConfigureAwait(false);
-        _cache[id] = (fresh, DateTime.UtcNow);
+        var snap = fresh is null ? null : Clone(fresh);
+        _cache[id] = (snap, DateTime.UtcNow);
     }
+
+    private static Auction Clone(Auction a) => new()
+    {
+        Id = a.Id,
+        OwnerRegionId = a.OwnerRegionId,
+        State = a.State,
+        EndsAtUtc = a.EndsAtUtc,
+        CreatedAtUtc = a.CreatedAtUtc,
+        UpdatedAtUtc = a.UpdatedAtUtc,
+        CurrentHighBid = a.CurrentHighBid,
+        CurrentSeq = a.CurrentSeq,
+        RowVersion = a.RowVersion,
+        WinnerBidId = a.WinnerBidId,
+        DeletedAtUtc = a.DeletedAtUtc
+    };
 }

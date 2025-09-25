@@ -40,4 +40,24 @@ public sealed class InMemoryAuctionRepository : IAuctionRepository
         }
         return Task.CompletedTask;
     }
+
+    #region For testing only
+
+    private readonly object _sync = new();
+    public bool TryUpdateCurrentHighBid(Guid auctionId, long expectedRowVersion, decimal newAmount, long newSeq)
+    {
+        lock (_sync)
+        {
+            if (!_auctionDict.TryGetValue(auctionId, out var a)) return false;
+            if (a.RowVersion != expectedRowVersion) return false;
+
+            a.CurrentHighBid = newAmount;
+            a.CurrentSeq = newSeq;
+            a.RowVersion += 1;
+            _auctionDict[auctionId] = a;
+            return true;
+        }
+    }
+
+    #endregion
 }

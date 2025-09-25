@@ -1,76 +1,48 @@
-using Xunit;
 using FluentAssertions;
+using Xunit;
+using Domain.Model;
+using Infrastructure.InMemory;
 
 namespace UnitTests;
 
 public class ReadConsistencyTests
 {
-    [Fact(DisplayName = "Strong reflects latest; Eventual may be stale within configured lag")]
-    public void Strong_Vs_Eventual_Reads()
+    [Fact(DisplayName = "Strong reflects latest; Eventual lags updates by configured period")]
+    public async Task Strong_Vs_Eventual_Reads()
     {
-        var writeDatabase = new InMemoryKV();
-        var replica = new LaggedReplica(writeDatabase, lag: TimeSpan.FromMilliseconds(500));
+        var writeRepository = new InMemoryAuctionRepository();
+        var replica = new InMemoryLaggedAuctionReplica(writeRepository, TimeSpan.FromMilliseconds(500));
 
-        writeDatabase.Set("A123", "v1");
-
-        // Cold start: first read must be stale (no snapshot yet)
-        replica.Get("A123").Should().BeNull("replica not updated yet (stale)");
-
-        // After lag, replica is eventually consistent
-        System.Threading.Thread.Sleep(550);
-        replica.Get("A123").Should().Be("v1");
-    }
-
-    private sealed class InMemoryKV
-    {
-        private readonly Dictionary<string, string?> _data = new();
-        public void Set(string key, string? value) => _data[key] = value;
-        public string? Get(string key) => _data.TryGetValue(key, out var v) ? v : null;
-    }
-
-    private sealed class LaggedReplica(ReadConsistencyTests.InMemoryKV source, TimeSpan lag)
-    {
-        private readonly InMemoryKV _source = source;
-        private readonly TimeSpan _lag = lag < TimeSpan.Zero ? TimeSpan.Zero : lag;
-
-        // Per-key snapshot + timestamp
-        private readonly Dictionary<string, (string? Value, DateTime SnapshotUtc)> _replica = new();
-        // Per-key first-observed time to enforce cold-start lag
-        private readonly Dictionary<string, DateTime> _firstSeen = new();
-
-        public string? Get(string key)
+        var auctionId = Guid.NewGuid();
+        await writeRepository.InsertAsync(new Auction
         {
-            var now = DateTime.UtcNow;
+            Id = auctionId,
+            OwnerRegionId = Region.US,
+            State = AuctionState.Draft,
+            EndsAtUtc = DateTime.UtcNow.AddMinutes(5),
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow,
+            CurrentHighBid = 100m,
+            RowVersion = 1
+        });
 
-            // If we have a snapshot: refresh only after lag
-            if (_replica.TryGetValue(key, out var snap))
-            {
-                if ((now - snap.SnapshotUtc) > _lag)
-                {
-                    var refreshed = _source.Get(key);
-                    _replica[key] = (refreshed, now);
-                    return refreshed;
-                }
-                return snap.Value;
-            }
+        var snapshot1 = await replica.GetFromReplicaAsync(auctionId);
+        snapshot1.Should().NotBeNull();
+        snapshot1!.CurrentHighBid.Should().Be(100m);
 
-            // Cold start for this key: first call records time and returns null
-            if (!_firstSeen.TryGetValue(key, out var seenAt))
-            {
-                _firstSeen[key] = now;
-                return null;
-            }
+        var strong = await writeRepository.GetAsync(auctionId);
+        strong!.CurrentHighBid = 200m;
+        strong.UpdatedAtUtc = DateTime.UtcNow;
+        strong.RowVersion += 1;
+        await writeRepository.InsertAsync(strong);
 
-            // Only after lag since first observe do we fetch from source
-            if ((now - seenAt) <= _lag)
-            {
-                return null; // still stale
-            }
+        var snapshot2 = await replica.GetFromReplicaAsync(auctionId);
+        snapshot2.Should().NotBeNull();
+        snapshot2!.CurrentHighBid.Should().Be(100m, "replica is stale within the configured lag");
 
-            var fetched = _source.Get(key);
-            _replica[key] = (fetched, now);
-            _firstSeen.Remove(key);
-            return fetched;
-        }
+        await Task.Delay(550);
+        var snapshot3 = await replica.GetFromReplicaAsync(auctionId);
+        snapshot3.Should().NotBeNull();
+        snapshot3!.CurrentHighBid.Should().Be(200m, "replica refreshed after lag");
     }
 }
