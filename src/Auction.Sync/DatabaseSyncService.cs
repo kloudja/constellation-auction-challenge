@@ -3,6 +3,7 @@ using Domain.Model;
 using System.Text.Json;
 using Eventing;
 using Infrastructure;
+using Domain;
 
 namespace Sync;
 
@@ -18,6 +19,7 @@ public sealed class DatabaseSyncService : IDisposable
     private readonly IEventStoreRepository _store;
 
     private readonly IDisposable _subscription;
+    private readonly IBidOrderingService _bidOrderingService;
 
     public DatabaseSyncService(
         string localRegion,
@@ -26,7 +28,8 @@ public sealed class DatabaseSyncService : IDisposable
         IAppliedEventRepository applied,
         IBidRepository bids,
         IAuctionRepository auctions,
-        IEventStoreRepository store)
+        IEventStoreRepository store,
+        IBidOrderingService bidOrderingService)
     {
         _localRegion = localRegion;
         _localBus = localBus;
@@ -35,6 +38,7 @@ public sealed class DatabaseSyncService : IDisposable
         _bids = bids;
         _auctions = auctions;
         _store = store;
+        _bidOrderingService = bidOrderingService;
 
         _subscription = _localBus.Subscribe(envelope =>
         {
@@ -113,6 +117,15 @@ public sealed class DatabaseSyncService : IDisposable
                             PartitionFlag = bidPlacedPayload.PartitionFlag,
                             UpdatedAtUtc = DateTime.UtcNow
                         };
+
+                        var verdict = await _bidOrderingService.ValidateBidOrderAsync(bid.AuctionId.ToString(), bid).ConfigureAwait(false);
+
+                        if (await _bids.ExistsAsync(bid.AuctionId, bid.SourceRegionId, bid.Sequence, ct).ConfigureAwait(false))
+                        {
+                            await _applied.MarkAppliedAsync(e.EventId, DateTime.UtcNow, ct).ConfigureAwait(false);
+                            break;
+                        }
+
                         await _bids.InsertAsync(bid, ct).ConfigureAwait(false);
                     }
 

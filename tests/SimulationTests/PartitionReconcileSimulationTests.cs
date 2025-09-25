@@ -42,7 +42,7 @@ public class PartitionReconcileSimulationTests
             usVehicleRepository);
 
         var usPublisher = new EventPublisher("US", usOutboxRepository, usEventStore, busUS);
-        var usDatabaseSyncService = new DatabaseSyncService("US", busUS, link, usAppliedEvents, usBidRepository, usAuctionRepository, usEventStore);
+        var usDatabaseSyncService = new DatabaseSyncService("US", busUS, link, usAppliedEvents, usBidRepository, usAuctionRepository, usEventStore, usBidOrderingService);
 
         // ---------- EU infrastructure ----------
         var euAuctionRepository = new InMemoryAuctionRepository();
@@ -67,7 +67,7 @@ public class PartitionReconcileSimulationTests
             euVehicleRepository);
 
         var euPublisher = new EventPublisher("EU", euOutboxRepository, euEventStore, busEU);
-        var euDatabaseSyncService = new DatabaseSyncService("EU", busEU, link, euAppliedEvents, euBidRepository, euAuctionRepository, euEventStore);
+        var euDatabaseSyncService = new DatabaseSyncService("EU", busEU, link, euAppliedEvents, euBidRepository, euAuctionRepository, euEventStore, euBidOrderingService);
 
         // ---------- Arrange vehicle + auction ----------
         var usVehicleService = new VehicleService(usVehicleRepository);

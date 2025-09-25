@@ -22,14 +22,22 @@ public sealed class BidOrderingService(IBidRepository bidRepository) : IBidOrder
         return Task.FromResult(next);
     }
 
-    public Task<bool> ValidateBidOrderAsync(string auctionId, Bid bid)
+    public Task<BidAcceptance> ValidateBidOrderAsync(string auctionId, Bid bid)
     {
         if (bid is null) throw new ArgumentNullException(nameof(bid));
+        if (string.IsNullOrWhiteSpace(auctionId)) throw new ArgumentException("Required", nameof(auctionId));
+        if (bid.Sequence <= 0) return Task.FromResult(BidAcceptance.Invalid);
 
         if (_perAuctionSeq.TryGetValue(auctionId, out var last))
-            return Task.FromResult(bid.Sequence <= last + 1);
+        {
+            if (bid.Sequence == last + 1) return Task.FromResult(BidAcceptance.Accepted);
+            if (bid.Sequence <= last) return Task.FromResult(BidAcceptance.Duplicate);
+            return Task.FromResult(BidAcceptance.OutOfOrder);
+        }
 
-        return Task.FromResult(bid.Sequence == 1);
+        return Task.FromResult(bid.Sequence == 1
+            ? BidAcceptance.Accepted
+            : BidAcceptance.OutOfOrder);
     }
 
     public async Task<IEnumerable<Bid>> GetOrderedBidsAsync(string auctionId, DateTime? since = null)

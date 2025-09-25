@@ -53,7 +53,7 @@ public class EndToEndSmokeTests
             usVehicleRepository);
 
         var usPublisher = new EventPublisher("US", usOutboxRepository, usEventStore, busUS);
-        var usDatabaseSyncService = new DatabaseSyncService("US", busUS, link, usAppliedEvents, usBidRepository, usAuctionRepository, usEventStore);
+        var usDatabaseSyncService = new DatabaseSyncService("US", busUS, link, usAppliedEvents, usBidRepository, usAuctionRepository, usEventStore, usBidOrderingService);
 
         var euBidOrderingService = new BidOrderingService(euBidRepository);
         var euAuctionService = new AuctionService(
@@ -68,7 +68,7 @@ public class EndToEndSmokeTests
             euVehicleRepository);
 
         var euPublisher = new EventPublisher("EU", euOutboxRepository, euEventStore, busEU);
-        var euDatabaseSyncService = new DatabaseSyncService("EU", busEU, link, euAppliedEvents, euBidRepository, euAuctionRepository, euEventStore);
+        var euDatabaseSyncService = new DatabaseSyncService("EU", busEU, link, euAppliedEvents, euBidRepository, euAuctionRepository, euEventStore, euBidOrderingService);
 
         var usVehicleService = new VehicleService(usVehicleRepository);
         var usVehicle = await usVehicleService.CreateAsync(new CreateVehicleRequest("US", "SUV", "Toyota", "RAV4", 2022));
