@@ -25,7 +25,7 @@ dotnet test
 dotnet test --filter "FullyQualifiedName~Partition|Category=partition"
 ```
 
-### Database integration tests
+### Database integration tests (NOT TESTED)
 Set an environment variable with your SQL Server connection string (LocalDB or full SQL Server). If TEST_SQL_CONNSTR is unset, DB integration tests are skipped.
 
 Windows PowerShell:
