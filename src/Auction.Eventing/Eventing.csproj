@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Auction.Domain\Domain.csproj" />
+    <ProjectReference Include="..\Auction.Infrastructure\Infrastructure.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

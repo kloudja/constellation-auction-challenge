@@ -1,5 +1,4 @@
 using Domain.Model;
-using System.Threading.Tasks;
 
 namespace Domain;
 

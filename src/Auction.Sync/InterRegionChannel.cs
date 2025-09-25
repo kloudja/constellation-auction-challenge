@@ -1,12 +1,7 @@
 ﻿using Domain.Events;
-using System.Collections.Generic;
 
 namespace Sync;
 
-/// <summary>
-/// Simulated inter-region link with 2 mailboxes (US->EU and EU->US).
-/// Supports Connected/Partitioned/Healing by buffering and flushing batches.
-/// </summary>
 public enum LinkState { Connected, Partitioned, Healing }
 
 public sealed class InterRegionChannel
@@ -20,7 +15,7 @@ public sealed class InterRegionChannel
 
     public void Send(string fromRegion, EventEnvelope e)
     {
-        if (fromRegion == "US")
+        if (string.Equals(fromRegion, "US", StringComparison.Ordinal))
         {
             if (State == LinkState.Partitioned) _usToEu.Enqueue(e);
             else _usToEu.Enqueue(e);
@@ -34,7 +29,7 @@ public sealed class InterRegionChannel
 
     public IEnumerable<EventEnvelope> DrainTo(string toRegion)
     {
-        var q = toRegion == "EU" ? _usToEu : _euToUs;
+        var q = string.Equals(toRegion, "EU", StringComparison.Ordinal) ? _usToEu : _euToUs;
         while (q.Count > 0) yield return q.Dequeue();
     }
 }

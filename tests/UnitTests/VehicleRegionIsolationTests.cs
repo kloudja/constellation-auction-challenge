@@ -1,10 +1,4 @@
-﻿using Domain.Model;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Domain.Abstractions;
+﻿using Domain;
 using Domain.Model;
 using FluentAssertions;
 using Infrastructure.InMemory;
@@ -55,7 +49,7 @@ public class VehicleRegionIsolationTests
         InMemoryVehicleRepository repo = new();
         VehicleService service = new(repo);
 
-        Func<Task> act = () => service.CreateAsync(new CreateVehicleRequest("US", "Boat", "Yamaha", "X", 2025));
+        var act = () => service.CreateAsync(new CreateVehicleRequest("US", "Boat", "Yamaha", "X", 2025));
         await act.Should().ThrowAsync<ArgumentException>().WithMessage("*Sedan*SUV*Hatchback*Truck*");
     }
 }

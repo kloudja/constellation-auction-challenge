@@ -1,15 +1,10 @@
 using Xunit;
 using FluentAssertions;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Linq;
-using System;
 using Domain;
 using Domain.Model;
 
 namespace UnitTests;
 
-// Demonstrates per-auction monotonic sequence assignment.
 public class BidOrderingServiceTests
 {
     [Fact(DisplayName = "Assigns monotonic sequence per auction")]
@@ -33,15 +28,15 @@ public class BidOrderingServiceTests
         var a1 = Guid.NewGuid().ToString();
         var a2 = Guid.NewGuid().ToString();
 
-        await svc.GetNextBidSequenceAsync(a1); // 1
-        var x = await svc.GetNextBidSequenceAsync(a2); // 1
+        await svc.GetNextBidSequenceAsync(a1); 
+        var x = await svc.GetNextBidSequenceAsync(a2);
 
         x.Should().Be(1);
     }
 
     private sealed class InMemoryBidOrderingService : IBidOrderingService
     {
-        private readonly Dictionary<string,long> _seq = new();
+        private readonly Dictionary<string, long> _seq = new();
 
         public Task<long> GetNextBidSequenceAsync(string auctionId)
         {

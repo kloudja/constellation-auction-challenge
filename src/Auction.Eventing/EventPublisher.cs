@@ -1,28 +1,14 @@
 ﻿using Domain.Events;
-using Domain.Abstractions;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
+using Infrastructure;
 
 namespace Eventing;
 
-/// <summary>
-/// Polls the outbox, publishes to local bus, marks rows as Published=true.
-/// </summary>
-public sealed class EventPublisher
+public sealed class EventPublisher(string region, IEventOutboxRepository outbox, IEventStoreRepository store, IEventBus bus)
 {
-    private readonly string _region;
-    private readonly IEventOutboxRepository _outbox;
-    private readonly IEventStoreRepository _store;
-    private readonly IEventBus _bus;
-
-    public EventPublisher(string region, IEventOutboxRepository outbox, IEventStoreRepository store, IEventBus bus)
-    {
-        _region = region;
-        _outbox = outbox;
-        _store = store;
-        _bus = bus;
-    }
+    private readonly string _region = region;
+    private readonly IEventOutboxRepository _outbox = outbox;
+    private readonly IEventStoreRepository _store = store;
+    private readonly IEventBus _bus = bus;
 
     public async Task<int> PublishPendingAsync(int batchSize = 128, CancellationToken ct = default)
     {

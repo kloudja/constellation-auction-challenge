@@ -1,5 +1,3 @@
-using System;
-
 namespace Domain.Model;
 
 public sealed class Bid

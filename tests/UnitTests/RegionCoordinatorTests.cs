@@ -1,72 +1,62 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Domain;
-using Sync;
+﻿using Sync;
 using Domain.Abstractions;
 using FluentAssertions;
 using Xunit;
 
-namespace UnitTests
+namespace UnitTests;
+
+public class RegionCoordinatorTests
 {
-    public class RegionCoordinatorTests
+    [Fact(DisplayName = "PartitionDetected and PartitionHealed events fire with correct args")]
+    public async Task Events_Fire_On_State_Transitions()
     {
-        [Fact(DisplayName = "PartitionDetected and PartitionHealed events fire with correct args")]
-        public async Task Events_Fire_On_State_Transitions()
-        {
-            RegionCoordinator regionCoordinator = new();
+        RegionCoordinator regionCoordinator = new();
 
-            List<PartitionChangedEventArgs> detected = new();
-            List<PartitionChangedEventArgs> healed = new();
+        List<PartitionChangedEventArgs> detected = new();
+        List<PartitionChangedEventArgs> healed = new();
 
-            regionCoordinator.PartitionDetected += (_, e) => detected.Add(e);
-            regionCoordinator.PartitionHealed += (_, e) => healed.Add(e);
+        regionCoordinator.PartitionDetected += (_, e) => detected.Add(e);
+        regionCoordinator.PartitionHealed += (_, e) => healed.Add(e);
 
-            // Initially connected
-            (await regionCoordinator.GetPartitionStatusAsync()).IsPartitioned.Should().BeFalse();
+        (await regionCoordinator.GetPartitionStatusAsync()).IsPartitioned.Should().BeFalse();
 
-            regionCoordinator.SetPartitioned();
-            (await regionCoordinator.GetPartitionStatusAsync()).IsPartitioned.Should().BeTrue();
-            detected.Should().HaveCount(1);
-            detected[0].FromState.Should().Be("Connected");
-            detected[0].ToState.Should().Be("Partitioned");
+        regionCoordinator.SetPartitioned();
+        (await regionCoordinator.GetPartitionStatusAsync()).IsPartitioned.Should().BeTrue();
+        detected.Should().HaveCount(1);
+        detected[0].FromState.Should().Be("Connected");
+        detected[0].ToState.Should().Be("Partitioned");
 
-            // During partition, both regions are unreachable
-            (await regionCoordinator.IsRegionReachableAsync("US")).Should().BeFalse();
-            (await regionCoordinator.IsRegionReachableAsync("EU")).Should().BeFalse();
+        (await regionCoordinator.IsRegionReachableAsync("US")).Should().BeFalse();
+        (await regionCoordinator.IsRegionReachableAsync("EU")).Should().BeFalse();
 
-            regionCoordinator.SetConnected();
-            (await regionCoordinator.GetPartitionStatusAsync()).IsPartitioned.Should().BeFalse();
-            healed.Should().HaveCount(1);
-            healed[0].FromState.Should().Be("Partitioned");
-            healed[0].ToState.Should().Be("Connected");
+        regionCoordinator.SetConnected();
+        (await regionCoordinator.GetPartitionStatusAsync()).IsPartitioned.Should().BeFalse();
+        healed.Should().HaveCount(1);
+        healed[0].FromState.Should().Be("Partitioned");
+        healed[0].ToState.Should().Be("Connected");
 
-            (await regionCoordinator.IsRegionReachableAsync("US")).Should().BeTrue();
-            (await regionCoordinator.IsRegionReachableAsync("EU")).Should().BeTrue();
-        }
-
-        [Fact(DisplayName = "ExecuteInRegionAsync throws when region is unreachable")]
-        public async Task ExecuteInRegionAsync_Throws_When_Unreachable()
-        {
-            RegionCoordinator regionCoordinator = new();
-            regionCoordinator.SetPartitioned();
-
-            Func<Task<int>> op = () => regionCoordinator.ExecuteInRegionAsync<int>(
-                "EU",
-                async ct => { await Task.Delay(1, ct); return 42; });
-
-            await op.Should().ThrowAsync<InvalidOperationException>()
-                .WithMessage("*unreachable due to partition*");
-
-            regionCoordinator.SetConnected();
-
-            int result = await regionCoordinator.ExecuteInRegionAsync<int>(
-                "EU",
-                async ct => { await Task.Delay(1, ct); return 42; });
-            result.Should().Be(42);
-        }
+        (await regionCoordinator.IsRegionReachableAsync("US")).Should().BeTrue();
+        (await regionCoordinator.IsRegionReachableAsync("EU")).Should().BeTrue();
     }
 
+    [Fact(DisplayName = "ExecuteInRegionAsync throws when region is unreachable")]
+    public async Task ExecuteInRegionAsync_Throws_When_Unreachable()
+    {
+        RegionCoordinator regionCoordinator = new();
+        regionCoordinator.SetPartitioned();
+
+        Func<Task<int>> op = () => regionCoordinator.ExecuteInRegionAsync<int>(
+            "EU",
+            async ct => { await Task.Delay(1, ct); return 42; });
+
+        await op.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*unreachable due to partition*");
+
+        regionCoordinator.SetConnected();
+
+        var result = await regionCoordinator.ExecuteInRegionAsync<int>(
+            "EU",
+            async ct => { await Task.Delay(1, ct); return 42; });
+        result.Should().Be(42);
+    }
 }

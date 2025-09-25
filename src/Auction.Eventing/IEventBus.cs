@@ -1,7 +1,6 @@
 ﻿using Domain.Events;
-using System;
 
-namespace Domain.Abstractions;
+namespace Eventing;
 
 public interface IEventBus
 {

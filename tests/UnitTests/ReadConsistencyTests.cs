@@ -1,18 +1,15 @@
 using Xunit;
 using FluentAssertions;
-using System.Collections.Generic;
-using System;
 
 namespace UnitTests;
 
-// Strong reads hit Write DB; Eventual reads hit Read Replica with lag.
 public class ReadConsistencyTests
 {
     [Fact(DisplayName = "Strong reflects latest; Eventual may be stale within configured lag")]
     public void Strong_Vs_Eventual_Reads()
     {
-        InMemoryKV writeDatabase = new InMemoryKV();
-        LaggedReplica replica = new LaggedReplica(writeDatabase, lag: TimeSpan.FromMilliseconds(500));
+        var writeDatabase = new InMemoryKV();
+        var replica = new LaggedReplica(writeDatabase, lag: TimeSpan.FromMilliseconds(500));
 
         writeDatabase.Set("A123", "v1");
 
@@ -31,32 +28,26 @@ public class ReadConsistencyTests
         public string? Get(string key) => _data.TryGetValue(key, out var v) ? v : null;
     }
 
-    private sealed class LaggedReplica
+    private sealed class LaggedReplica(ReadConsistencyTests.InMemoryKV source, TimeSpan lag)
     {
-        private readonly InMemoryKV _source;
-        private readonly TimeSpan _lag;
+        private readonly InMemoryKV _source = source;
+        private readonly TimeSpan _lag = lag < TimeSpan.Zero ? TimeSpan.Zero : lag;
 
         // Per-key snapshot + timestamp
         private readonly Dictionary<string, (string? Value, DateTime SnapshotUtc)> _replica = new();
         // Per-key first-observed time to enforce cold-start lag
         private readonly Dictionary<string, DateTime> _firstSeen = new();
 
-        public LaggedReplica(InMemoryKV source, TimeSpan lag)
-        {
-            _source = source;
-            _lag = lag < TimeSpan.Zero ? TimeSpan.Zero : lag;
-        }
-
         public string? Get(string key)
         {
-            DateTime now = DateTime.UtcNow;
+            var now = DateTime.UtcNow;
 
             // If we have a snapshot: refresh only after lag
             if (_replica.TryGetValue(key, out var snap))
             {
                 if ((now - snap.SnapshotUtc) > _lag)
                 {
-                    string? refreshed = _source.Get(key);
+                    var refreshed = _source.Get(key);
                     _replica[key] = (refreshed, now);
                     return refreshed;
                 }
@@ -64,7 +55,7 @@ public class ReadConsistencyTests
             }
 
             // Cold start for this key: first call records time and returns null
-            if (!_firstSeen.TryGetValue(key, out DateTime seenAt))
+            if (!_firstSeen.TryGetValue(key, out var seenAt))
             {
                 _firstSeen[key] = now;
                 return null;
@@ -76,7 +67,7 @@ public class ReadConsistencyTests
                 return null; // still stale
             }
 
-            string? fetched = _source.Get(key);
+            var fetched = _source.Get(key);
             _replica[key] = (fetched, now);
             _firstSeen.Remove(key);
             return fetched;

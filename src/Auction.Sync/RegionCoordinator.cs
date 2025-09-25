@@ -1,19 +1,7 @@
-﻿using Domain;
-using Domain.Abstractions;
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using IRegionCoordinator = Domain.Abstractions.IRegionCoordinator;
+﻿using Domain.Abstractions;
 
 namespace Sync;
 
-/// <summary>
-/// Simple region coordinator used in tests:
-/// - Manual toggling of link state (Partitioned/Connected)
-/// - Reachability map per region
-/// - Events fired on transitions
-/// </summary>
 public sealed class RegionCoordinator : IRegionCoordinator
 {
     private readonly HashSet<string> _knownRegions = new(StringComparer.OrdinalIgnoreCase) { "US", "EU" };
@@ -31,22 +19,22 @@ public sealed class RegionCoordinator : IRegionCoordinator
     public void SetPartitioned()
     {
         if (_state == LinkState.Partitioned) return;
-        string from = _state.ToString();
+        var from = _state.ToString();
         _state = LinkState.Partitioned;
         _sinceUtc = DateTime.UtcNow;
 
-        foreach (string region in _knownRegions) _reachability[region] = false;
+        foreach (var region in _knownRegions) _reachability[region] = false;
         PartitionDetected?.Invoke(this, new PartitionChangedEventArgs(from, _state.ToString(), _sinceUtc.Value));
     }
 
     public void SetConnected()
     {
         if (_state == LinkState.Connected) return;
-        string from = _state.ToString();
+        var from = _state.ToString();
         _state = LinkState.Connected;
-        DateTime at = DateTime.UtcNow;
+        var at = DateTime.UtcNow;
 
-        foreach (string region in _knownRegions) _reachability[region] = true;
+        foreach (var region in _knownRegions) _reachability[region] = true;
         PartitionHealed?.Invoke(this, new PartitionChangedEventArgs(from, _state.ToString(), at));
         _sinceUtc = null;
     }
@@ -54,7 +42,7 @@ public sealed class RegionCoordinator : IRegionCoordinator
     public Task<bool> IsRegionReachableAsync(string region, CancellationToken ct = default)
     {
         if (!_knownRegions.Contains(region)) return Task.FromResult(false);
-        return Task.FromResult(_reachability.TryGetValue(region, out bool reachable) && reachable);
+        return Task.FromResult(_reachability.TryGetValue(region, out var reachable) && reachable);
     }
 
     public Task<PartitionStatus> GetPartitionStatusAsync(CancellationToken ct = default)
@@ -62,7 +50,7 @@ public sealed class RegionCoordinator : IRegionCoordinator
         PartitionStatus status = new(
             IsPartitioned: _state == LinkState.Partitioned,
             SinceUtc: _sinceUtc,
-            RegionReachability: new Dictionary<string, bool>(_reachability));
+            RegionReachability: new Dictionary<string, bool>(_reachability, StringComparer.Ordinal));
         return Task.FromResult(status);
     }
 

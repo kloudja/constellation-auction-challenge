@@ -1,14 +1,10 @@
 ﻿using Domain;
-using Domain.Abstractions;
 using Domain.Model;
 using Eventing;
 using FluentAssertions;
 using Infrastructure.InMemory;
 using Services;
 using Sync;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace IntegrationTests;
@@ -54,7 +50,7 @@ public class EndToEndSmokeTests
             usOutboxRepository,
             usReconciliationRepository,
             usReadReplica,
-            usVehicleRepository); // NEW param
+            usVehicleRepository);
 
         var usPublisher = new EventPublisher("US", usOutboxRepository, usEventStore, busUS);
         var usDatabaseSyncService = new DatabaseSyncService("US", busUS, link, usAppliedEvents, usBidRepository, usAuctionRepository, usEventStore);
@@ -69,12 +65,11 @@ public class EndToEndSmokeTests
             euOutboxRepository,
             euReconciliationRepository,
             euReadReplica,
-            euVehicleRepository); // NEW param (not strictly used, but required by ctor)
+            euVehicleRepository);
 
         var euPublisher = new EventPublisher("EU", euOutboxRepository, euEventStore, busEU);
         var euDatabaseSyncService = new DatabaseSyncService("EU", busEU, link, euAppliedEvents, euBidRepository, euAuctionRepository, euEventStore);
 
-        // Prepare: create a Vehicle in US (region-specific, not replicated)
         var usVehicleService = new VehicleService(usVehicleRepository);
         var usVehicle = await usVehicleService.CreateAsync(new CreateVehicleRequest("US", "SUV", "Toyota", "RAV4", 2022));
 
@@ -88,7 +83,7 @@ public class EndToEndSmokeTests
 
         (await euAuctionRepository.GetAsync(a.Id)).Should().NotBeNull();
 
-        // 3) US activates auction (emits AuctionActivated), publish → EU apply (EU mirror goes Active)
+        // 3) US activates auction (emits AuctionActivated), publish -> EU apply (EU mirror goes Active)
         await usAuctionService.ActivateAsync(a.Id);
         await usPublisher.PublishPendingAsync();
         await euDatabaseSyncService.DrainAndApplyAsync();
