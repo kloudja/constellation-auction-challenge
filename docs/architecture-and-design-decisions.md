@@ -136,10 +136,3 @@ dotnet test --filter "FullyQualifiedName~Partition|Category=partition"
 ```
 
 **SQL integration tests** (optional): set `TEST_SQL_CONNSTR` to LocalDB/SQL; if unset, these tests are skipped.
-
----
-
-## 9) API & Naming (small, optional refinement)
-
-- Replace `ValidateBidOrderAsync(): bool` with an **enum** `BidAcceptance { Accepted, Duplicate, OutOfOrder, Invalid }` to better reflect expected outcomes.  
-- Document that `IRegionCoordinator` **simulates topology and partition/latency**; there are no real network calls.
