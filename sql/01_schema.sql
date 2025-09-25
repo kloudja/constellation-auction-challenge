@@ -113,7 +113,7 @@ CREATE TABLE dbo.AuditLog (
   EntityType    NVARCHAR(50) NOT NULL,    -- 'Vehicle','Auction','Bid','Event'
   EntityId      UNIQUEIDENTIFIER NULL,
   Operation     NVARCHAR(30) NOT NULL,    -- 'Create','Update','Delete','ApplyEvent'
-  RegionId      NVARCHAR(8) NULL,         -- where operation occurred
+  RegionId      NVARCHAR(8) NULL,         
   PayloadJson   NVARCHAR(MAX) NULL,
   CreatedAtUtc  DATETIME2(3) NOT NULL CONSTRAINT DF_Audit_CreatedAt DEFAULT SYSUTCDATETIME()
 );

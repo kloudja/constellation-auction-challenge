@@ -1,7 +1,7 @@
 -- Optimistic update with rowversion check (CAS)
-IF OBJECT_ID('dbo.usp_Auction_UpdateAmounts_CAS','P') IS NOT NULL DROP PROCEDURE dbo.usp_Auction_UpdateAmounts_CAS;
+IF OBJECT_ID('dbo.Auction_UpdateAmounts','P') IS NOT NULL DROP PROCEDURE dbo.Auction_UpdateAmounts;
 GO
-CREATE PROCEDURE dbo.usp_Auction_UpdateAmounts_CAS
+CREATE PROCEDURE dbo.Auction_UpdateAmounts
   @AuctionId UNIQUEIDENTIFIER,
   @NewHigh   DECIMAL(18,2),
   @NewSeq    BIGINT,
